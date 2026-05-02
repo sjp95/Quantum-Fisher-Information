@@ -1,0 +1,9 @@
+*.dat
+.DS_Store
+*.pdf
+*.png
+*.jpeg
+*.jpg
+*.key
+*.log
+*.sge

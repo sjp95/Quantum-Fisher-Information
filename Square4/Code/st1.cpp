@@ -5,7 +5,7 @@
 #include <fstream>
 //#include <omp.h>
 //#include "mkl_lapacke.h"
-#include "Slave_rotor/slave_rotor.hpp"
+#include "Master/master.hpp"
 using namespace std;
 
 char title[100];

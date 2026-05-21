@@ -28,6 +28,8 @@ class input
         MatrixXcd Jz= MatrixXcd::Ones(N,N);             //             | D 
         MatrixXcd evs = MatrixXcd :: Zero(le,le);      //             | A
         VectorXd es = VectorXd :: Zero(le);
+        double    gs_energy = 0.0;
+        VectorXcd gs_vector = VectorXcd :: Zero(le);
         //-------------------------------------------------//
         //=================================================================//
     public:               
@@ -42,6 +44,9 @@ class input
         void basis_print();
         void QFI(double qx);
         void tQFI(double qx, double Tmin, double Tmax, int nT, bool clean=false);
+        void Sx();
+        void gSz_GPU();
+        void gSz_CPU();
     private:
         //===========================//                                       |  R
         void outsidehoping( int i);        //| Hamiltonian                    |  O                      
@@ -53,12 +58,11 @@ class input
         void output();   
         bool createDirectory(const std::string& path);
         //void QFI(double q);
-        void Sx();
-        void Sz();
     public:
         // void total_converge(double U1);
         // void U_phi(double U1);
         void mu_phi(bool clean=false);
+        void ground_state(bool clean=false);
         //======================================================//
         double Fermi(double e,double m);
         double delta(double x0, double x);

@@ -97,6 +97,12 @@ bool input::createDirectory(const std::string& path)
     }
 }
 
+auto fmt = [](double v) {
+    std::ostringstream oss;
+    oss << std::setw(8) << std::setfill('0') << static_cast<long long>(std::round(v * 1e6));
+    return oss.str();
+};
+
 //================================================================================//
 
 #endif

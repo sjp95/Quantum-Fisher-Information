@@ -16,17 +16,31 @@ int main(int argc, char* argv[])
     double Tmin = atof(argv[5]);
     double Tmax = atof(argv[6]);
     int    nT   = atoi(argv[7]);
-    bool   clean= atoi(argv[8]);
+    int   code= atoi(argv[8]);
+
+    // code = 1*clean + 2*qfi_flag + 4*sz_flag
+    bool clean    = code & 1;
+    bool qfi_flag = code & 2;
+    bool sz_flag  = code & 4;
 
     // cout<<"start\n";
     input Data;
     Data.besis(N, J1, J2, 0.0, 0.0, hz);
-    Data.mu_phi(clean);   // diagonalize once, cache eigenspectrum
 
     // M is built or loaded once inside QFI, then
     // the full T sweep runs in memory — no repeated I/O
     // cout<<"to enter tQFI\n";
-    Data.tQFI(M_PI, Tmin, Tmax, nT, clean);
+    if (qfi_flag)
+    {
+        Data.mu_phi(clean);   // diagonalize once, cache eigenspectrum
+        Data.tQFI(M_PI, Tmin, Tmax, nT, clean);
+    }
 
+    if (sz_flag)
+    {
+        Data.ground_state(clean);
+        Data.gSz_CPU();
+        // Data.gSz_GPU();
+    }
     return 0;
 }

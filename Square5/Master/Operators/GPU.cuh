@@ -8,3 +8,8 @@ void launch_qfi_tloop(
     double* d_QFI,
     int le, int N, int nT,
     double Tmin, double Tmax);
+
+void launch_sz_gpu(
+    const double* d_weights,
+    double* d_Sz,
+    int le, int N, int Ls);

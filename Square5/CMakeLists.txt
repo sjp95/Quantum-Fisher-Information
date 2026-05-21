@@ -1,8 +1,3 @@
-# #=============================================================================#
-# # This script compiles and runs the desktop version of the program With MKL
-# # Verified working on the susskind cluster of NISER
-# # Please set the different _ROOT paths as per your cluster Configuration
-# #=============================================================================#
 cmake_minimum_required(VERSION 3.16)
 project(EigenHDF5 LANGUAGES C CXX CUDA)
 
@@ -32,9 +27,8 @@ find_package(OpenMP REQUIRED)
 find_package(Threads REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
-add_executable(s1 st1.cpp Master/Operators/GPU.cu)
-add_executable(r1 read.cpp)
-add_executable(trun trun.cpp Master/Operators/GPU.cu)
+add_executable(st st.cpp Master/Operators/GPU.cu Master/Operators/GPU.cpp)
+add_executable(mt mt.cpp Master/Operators/GPU.cu Master/Operators/GPU.cpp)
 
 # Common include directories
 set(COMMON_INCLUDES
@@ -46,12 +40,11 @@ set(COMMON_INCLUDES
     ${MKLROOT}/include
 )
 
-target_include_directories(s1 PRIVATE ${COMMON_INCLUDES})
-target_include_directories(r1 PRIVATE ${COMMON_INCLUDES})
-target_include_directories(trun PRIVATE ${COMMON_INCLUDES})
+target_include_directories(st PRIVATE ${COMMON_INCLUDES})
+target_include_directories(mt PRIVATE ${COMMON_INCLUDES})
 
-# Link s1 with MKL and OpenMP
-target_link_libraries(s1 PRIVATE
+# Link st with MKL and OpenMP
+target_link_libraries(st PRIVATE
     Threads::Threads
     HDF5::HDF5
     OpenMP::OpenMP_CXX
@@ -71,7 +64,7 @@ target_link_libraries(s1 PRIVATE
     CUDA::cusolver
 )
 
-target_link_libraries(trun PRIVATE
+target_link_libraries(mt PRIVATE
     Threads::Threads
     HDF5::HDF5
     OpenMP::OpenMP_CXX
@@ -91,15 +84,10 @@ target_link_libraries(trun PRIVATE
     CUDA::cusolver
 )
 
-target_link_libraries(r1 PRIVATE
-    HDF5::HDF5
-    Threads::Threads
-)
-
-set_target_properties(s1 PROPERTIES
+set_target_properties(st PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_ARCHITECTURES 89)
 
-set_target_properties(trun PROPERTIES
+set_target_properties(mt PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_ARCHITECTURES 89)

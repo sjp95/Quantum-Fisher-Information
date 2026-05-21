@@ -20,16 +20,32 @@ int main(int argc,char* argv[])
     double J1=atof(argv[3]);
     double J2=atof(argv[4]);
     double hz=atof(argv[5]);
+    int  code=atoi(argv[6]);
+
+    // code = 1*clean + 2*qfi_flag + 4*sz_flag
+    bool clean    = code & 1;
+    bool qfi_flag = code & 2;
+    bool sz_flag  = code & 4;
 
     input Data;
     Data.T=T;
     Data.J1=J1;
     Data.J2=J2;
     Data.besis(N,J1,J2,0.0,0.0,hz);
-   // Data.Values();
-    Data.mu_phi();
-    
-    
+
+    if (qfi_flag)
+    {
+        Data.mu_phi(clean);   // diagonalize once, cache eigenspectrum
+        Data.QFI(M_PI);
+        // Data.QFI(M_PI, clean);
+    }
+
+    if (sz_flag)
+    {
+        Data.ground_state(clean);
+        Data.gSz_CPU();
+        // Data.gSz_GPU();
+    }
 }
 
 

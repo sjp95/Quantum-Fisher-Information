@@ -13,6 +13,8 @@
 #include "Operators/sz.hpp"
 #include "Operators/QFI.hpp"
 #include "values.hpp"
+#include <cuda_runtime.h>
+#include <cusolverDn.h>
 
 // #include "Operators/GPU.hpp"
 
@@ -85,7 +87,167 @@ void input::basis_print()
     cout<< "==============================="<<endl;
 }
 
-//==========================================================================================//    
+//==========================================================================================//
+
+void input::ground_state(bool clean)
+{
+    createDirectory("../Data/Eigen");
+
+    std::string outfile =
+    "../Data/Eigen/GroundState_" +
+    std::to_string(N) + "_" +
+    fmt(J1) + "_" +
+    fmt(J2) + "_" +
+    fmt(hz) + ".h5";
+
+    bool loaded_from_file = false;
+
+    cout << "===============================\n";
+    cout << "Ground State Mode\n";
+    cout << "hz: " << hz << "  Jx: " << J1 << "  Jz: " << J2 << "\n";
+    cout << "Output file: " << outfile << "\n";
+    cout << "===============================\n";
+
+    //----------------------------------------------------------
+    // Try loading cached ground state
+    //----------------------------------------------------------
+    if (std::filesystem::exists(outfile))
+    {
+        try
+        {
+            HighFive::File file(outfile, HighFive::File::ReadOnly);
+            file.getDataSet("gs_energy").read(gs_energy);
+            file.getDataSet("gs_vector").read(gs_vector);
+            MatrixXcd().swap(H);
+            loaded_from_file = true;
+            cout << "Ground state loaded from HDF5.\n";
+        }
+        catch (const std::exception& e)
+        {
+            cerr << "HDF5 Read Error: " << e.what() << " — recomputing.\n";
+        }
+    }
+
+    //----------------------------------------------------------
+    // Compute via Eigen SelfAdjointEigenSolver
+    //----------------------------------------------------------
+    if (!loaded_from_file)
+    {
+        Hspin();
+        cout << "H generated. H(0,0): " << H(0,0) << "\n";
+        cout << "Diagonalizing ground state on GPU (cuSOLVER)...\n";
+
+        MatrixXd H_real = H.real();
+        MatrixXcd().swap(H);
+
+        int n = H_real.rows();
+
+        //----------------------------------------------------------
+        // Host storage (column-major, cuSOLVER expects this)
+        //----------------------------------------------------------
+        std::vector<double> h_A(n * n);
+        // Eigen is column-major by default so this is a direct copy
+        memcpy(h_A.data(), H_real.data(), sizeof(double) * n * n);
+
+        std::vector<double> h_W(n);        // all eigenvalues (we read only [0])
+        std::vector<double> h_V(n * n);    // eigenvectors (we read only col 0)
+
+        //----------------------------------------------------------
+        // GPU allocations
+        //----------------------------------------------------------
+        double* d_A   = nullptr;
+        double* d_W   = nullptr;
+        int*    d_info = nullptr;
+
+        cudaMalloc(&d_A,    sizeof(double) * n * n);
+        cudaMalloc(&d_W,    sizeof(double) * n);
+        cudaMalloc(&d_info, sizeof(int));
+
+        cudaMemcpy(d_A, h_A.data(), sizeof(double) * n * n, cudaMemcpyHostToDevice);
+
+        //----------------------------------------------------------
+        // cuSOLVER setup
+        //----------------------------------------------------------
+        cusolverDnHandle_t handle;
+        cusolverDnCreate(&handle);
+
+        // Ask cuSOLVER how much workspace it needs
+        int lwork = 0;
+        cusolverDnDsyevd_bufferSize(
+            handle,
+            CUSOLVER_EIG_MODE_VECTOR,   // compute eigenvectors
+            CUBLAS_FILL_MODE_LOWER,     // use lower triangle of H
+            n, d_A, n, d_W, &lwork);
+
+        double* d_work = nullptr;
+        cudaMalloc(&d_work, sizeof(double) * lwork);
+
+        //----------------------------------------------------------
+        // Diagonalize — full spectrum on GPU, cheapest cuSOLVER path
+        // cusolverDnDsyevdx (subset) is available but requires
+        // cuSOLVER >= 11.0 and more setup; full diag is simpler and
+        // GPU-side cost is still O(n^3) either way for dense matrices.
+        //----------------------------------------------------------
+        cusolverDnDsyevd(
+            handle,
+            CUSOLVER_EIG_MODE_VECTOR,
+            CUBLAS_FILL_MODE_LOWER,
+            n, d_A, n, d_W,
+            d_work, lwork, d_info);
+
+        // Check for convergence
+        int info_host = 0;
+        cudaMemcpy(&info_host, d_info, sizeof(int), cudaMemcpyDeviceToHost);
+        if (info_host != 0)
+            cerr << "cuSOLVER dsyevd failed, info = " << info_host << "\n";
+
+        // Copy back only what we need: eigenvalue[0] and eigenvector col 0
+        cudaMemcpy(h_W.data(), d_W, sizeof(double) * n,     cudaMemcpyDeviceToHost);
+        cudaMemcpy(h_V.data(), d_A, sizeof(double) * n * n, cudaMemcpyDeviceToHost);
+        // Note: after dsyevd, d_A is overwritten with eigenvectors
+
+        //----------------------------------------------------------
+        // Extract ground state
+        //----------------------------------------------------------
+        gs_energy = h_W[0];
+        gs_vector.resize(n);
+        for (int i = 0; i < n; i++)
+            gs_vector(i) = complex<double>(h_V[i], 0.0);  // col 0 = first n elements
+
+        cout << "Ground state energy: " << gs_energy << "\n";
+        cout << "===============================\n";
+
+        //----------------------------------------------------------
+        // Cleanup
+        //----------------------------------------------------------
+        cudaFree(d_A);
+        cudaFree(d_W);
+        cudaFree(d_work);
+        cudaFree(d_info);
+        cusolverDnDestroy(handle);
+
+        //----------------------------------------------------------
+        // Cache to HDF5
+        //----------------------------------------------------------
+        if (!clean)
+        {
+            try
+            {
+                HighFive::File file(outfile, HighFive::File::Overwrite);
+                file.createDataSet("gs_energy", gs_energy);
+                file.createDataSet("gs_vector", gs_vector);
+                cout << "Ground state saved to HDF5.\n";
+            }
+            catch (const std::exception& e)
+            {
+                cerr << "HDF5 Write Error: " << e.what() << "\n";
+            }
+        }
+    }
+}
+
+
+//==========================================================================================//
 
 void input::mu_phi(bool clean)
 {
@@ -94,9 +256,12 @@ void input::mu_phi(bool clean)
     std::string outfile =
     "../Data/Eigen/EigenSpectrum_" +
     std::to_string(N) + "_" +
-    std::to_string(static_cast<int>(std::round(J1 * 1e6))) + "_" +
-    std::to_string(static_cast<int>(std::round(J2 * 1e6))) + "_" +
-    std::to_string(static_cast<int>(std::round(hz * 1e6))) + ".h5";
+    // std::to_string(static_cast<int>(std::round(J1 * 1e6))) + "_" +
+    // std::to_string(static_cast<int>(std::round(J2 * 1e6))) + "_" +
+    // std::to_string(static_cast<int>(std::round(hz * 1e6))) + ".h5";
+    fmt(J1) + "_" +
+    fmt(J2) + "_" +
+    fmt(hz) + ".h5";
     bool loaded_from_file = false;
 
     //basis_print();

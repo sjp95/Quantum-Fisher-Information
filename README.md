@@ -42,7 +42,7 @@ g++ -std=c++17 -O3 st1.cpp -o h \
 
 1. Edit the CMakeLists.txt as per cluster configuration.
 
-2. Load necessary modules. Data storage by h5 can be installed in anaconda, latest cmake and gcc, along with intel oneapi compilers for MKL.\\
+2. Load necessary modules. Data storage by h5 can be installed in anaconda, latest cmake and gcc, along with intel oneapi compilers for MKL.\
 eg. for Susskind cluster in NISER
 ```bash
 module load codes/anaconda/2025.12-1 compilers/cmake/4.3.2 compilers/oneapi/2026.0.0.198 compilers/gcc/13.4.0

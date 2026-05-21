@@ -80,3 +80,59 @@ void launch_qfi_tloop(
     qfi_tloop_kernel<<<nT, 256>>>(dM2, des, d_Z, d_QFI, le, N, nT, Tmin, Tmax);
     cudaDeviceSynchronize();
 }
+
+__global__ void sz_kernel(
+    const double* __restrict__ weights,  // |evs(n, 0)|^2, length le
+    double* __restrict__ out_Sz,
+    int le,
+    int N,
+    int Ls)
+{
+    // Each thread processes one basis state
+    __shared__ double sSum[256];
+
+    double local_sum = 0.0;
+
+    for (int n = threadIdx.x; n < le; n += blockDim.x)
+    {
+        // Weight = |evs(n, 0)|^2
+        double weight = weights[n];
+
+        // Compute local Sz for basis state n
+        int state = n;
+        double local_sz = 0.0;
+        for (int i = 0; i < N; i++)
+        {
+            int spin = state % Ls;
+            state /= Ls;
+            local_sz += (spin - 0.5);
+        }
+
+        local_sum += weight * local_sz;
+    }
+
+    sSum[threadIdx.x] = local_sum;
+    __syncthreads();
+
+    // Parallel reduction in shared memory
+    for (int s = blockDim.x / 2; s > 0; s >>= 1)
+    {
+        if (threadIdx.x < s)
+            sSum[threadIdx.x] += sSum[threadIdx.x + s];
+        __syncthreads();
+    }
+
+    if (threadIdx.x == 0)
+    {
+        out_Sz[0] = sSum[0] / (double)N;
+    }
+}
+
+void launch_sz_gpu(
+    const double* d_weights,
+    double* d_Sz,
+    int le, int N, int Ls)
+{
+    sz_kernel<<<1, 256>>>(d_weights, d_Sz, le, N, Ls);
+    cudaDeviceSynchronize();
+}

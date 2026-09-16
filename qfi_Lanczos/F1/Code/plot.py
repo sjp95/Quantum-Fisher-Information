@@ -3,17 +3,9 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 
-def collect_and_plot():
-    data_dir = "../Data/qfi"
-    combined_file = os.path.join(data_dir, "qfi_vs_hz_all.dat")
-
-    # Match all integer-indexed qfi files
-    file_pattern = os.path.join(data_dir, "qfi_[0-9]*.dat")
+def load_and_sort_data(data_dir, prefix):
+    file_pattern = os.path.join(data_dir, f"{prefix}_[0-9]*.dat")
     files = glob.glob(file_pattern)
-
-    if not files:
-        print(f"No data files found in {data_dir}.")
-        return
 
     data = []
     for filepath in files:
@@ -24,36 +16,61 @@ def collect_and_plot():
         except Exception as e:
             print(f"Skipping {filepath}: {e}")
 
-    # Sort data points strictly by hz
     data.sort(key=lambda x: x[0])
-    hz_vals = np.array([x[0] for x in data])
-    qfi_vals = np.array([x[1] for x in data])
+    return data
 
-    # Save consolidated dataset
-    with open(combined_file, "w") as f:
-        f.write("# hz\tQFI\n")
-        for hz, qfi in zip(hz_vals, qfi_vals):
-            f.write(f"{hz:.6f}\t{qfi:.8f}\n")
+def main():
+    qfi_dir = "../Data/qfi"
+    mag_dir = "../Data/Magnetization"
 
-    print(f"Collected {len(data)} points into {combined_file}")
+    qfi_data = load_and_sort_data(qfi_dir, "qfi")
+    mag_data = load_and_sort_data(mag_dir, "mag")
 
+    if not qfi_data or not mag_data:
+        print("Data files missing in ../Data/qfi or ../Data/Magnetization.")
+        return
 
-    # Create output directory if it doesn't exist
-    output_dir = "../Plot/qfi"
-    os.makedirs(output_dir, exist_ok=True)
+    # Consolidate QFI dataset
+    qfi_all_file = os.path.join(qfi_dir, "qfi_vs_hz_all.dat")
+    with open(qfi_all_file, "w") as f:
+        f.write("# hz\tQFI_density\n")
+        for hz, val in qfi_data:
+            f.write(f"{hz:.6f}\t{val:.8f}\n")
 
-    # Plot results
-    plt.figure(figsize=(8, 5))
-    plt.plot(hz_vals, qfi_vals, "o-", color="navy", linewidth=1.8, markersize=5, label=r"$q = \pi$")
-    plt.title(r"Zero-Temperature QFI vs $h_z$ (18-site Trimer Model)", fontsize=13)
-    plt.xlabel(r"External Field $h_z$", fontsize=12)
-    plt.ylabel(r"Quantum Fisher Information $F_Q$", fontsize=12)
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.legend(fontsize=11)
+    # Consolidate Magnetization dataset
+    mag_all_file = os.path.join(mag_dir, "mag_vs_hz_all.dat")
+    with open(mag_all_file, "w") as f:
+        f.write("# hz\tMagnetization_density\n")
+        for hz, val in mag_data:
+            f.write(f"{hz:.6f}\t{val:.8f}\n")
+
+    print(f"Saved combined files:\n  - {qfi_all_file}\n  - {mag_all_file}")
+
+    # Extract arrays for plotting
+    hz_qfi, qfi_vals = zip(*qfi_data)
+    hz_mag, mag_vals = zip(*mag_data)
+
+    # Plot two subplots (QFI and Magnetization vs hz)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+
+    # Subplot 1: QFI
+    ax1.plot(hz_qfi, qfi_vals, "o-", color="navy", linewidth=1.5, markersize=4, label=r"$F_Q/N$ ($q=\pi$)")
+    ax1.set_ylabel(r"QFI Density ($F_Q/N$)", fontsize=12)
+    ax1.set_title(r"18-site Trimer Model ($J_1-J_1-J_2$)", fontsize=14)
+    ax1.grid(True, linestyle="--", alpha=0.6)
+    ax1.legend(fontsize=11)
+
+    # Subplot 2: Magnetization
+    ax2.plot(hz_mag, mag_vals, "s-", color="firebrick", linewidth=1.5, markersize=4, label=r"$m_z$")
+    ax2.set_xlabel(r"External Magnetic Field ($h_z$)", fontsize=12)
+    ax2.set_ylabel(r"Magnetization Density ($m_z$)", fontsize=12)
+    ax2.grid(True, linestyle="--", alpha=0.6)
+    ax2.legend(fontsize=11)
+
     plt.tight_layout()
-
-    plt.savefig(os.path.join(output_dir, "qfi_vs_hz.png"), dpi=300)
+    qfi_plot = "../Plot/qfi"
+    plt.savefig(os.path.join(qfi_plot, "qfi_mag_vs_hz.pdf"), dpi=300)
     plt.show()
 
 if __name__ == "__main__":
-    collect_and_plot()
+    main()
